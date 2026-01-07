@@ -39,31 +39,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
     func processRecognizedText(_ text: String) {
         let method = UserDefaults.standard.string(forKey: "insertionMethod") ?? "clipboard"
         
-        // Context Logging
+        // Log info
         let frontApp = NSWorkspace.shared.frontmostApplication
         let appName = frontApp?.localizedName ?? "Unknown"
-        let bundleId = frontApp?.bundleIdentifier ?? "Unknown"
-        
-        self.log("🗣️ Recognized: '\(text)'")
-        self.log("⚙️ Method: \(method)")
-        self.log("🖥️ Active App: \(appName) (\(bundleId))")
+        self.log("🗣️ Recognized: '\(text)' in App: \(appName)")
         
         if method == "typing" {
-            // DIRECT TYPING MODE
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                self.log("⌨️ Executing Typing...")
+            // Typing Mode (AppleScript)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 self.simulateTyping(text)
             }
         } else {
-            // CLIPBOARD MODE
+            // Clipboard + AutoPaste Mode
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
             self.log("📋 Copied to Clipboard")
             
             if UserDefaults.standard.bool(forKey: "autoPaste") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    self.log("⌨️ Executing Paste Command...")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     self.simulatePasteCommand()
                 }
             }
@@ -71,18 +65,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
     }
     
     func simulateTyping(_ text: String) {
-        let trusted = AXIsProcessTrusted()
-        self.log("Accessibility Trusted: \(trusted)")
-        
-        if !trusted {
-            self.log("❌ Error: Accessibility permission missing for Typing.")
+        if !AXIsProcessTrusted() {
+            self.promptForAccessibility()
+            return
         }
 
+        let backslash = String(UnicodeScalar(92))
+        let escapedBackslash = backslash + backslash
+        
         let escapedText = text
-            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: backslash, with: escapedBackslash)
             .replacingOccurrences(of: "\"", with: "\\\"")
         
-        // Correctly indented multiline string
         let scriptSource = """
         tell application "System Events"
             keystroke "\(escapedText)"
@@ -95,10 +89,49 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
             if let error = error {
                 self.log("❌ AppleScript Error: \(error)")
             } else {
-                self.log("✅ Typing executed successfully via AppleScript")
+                self.log("✅ Typing executed successfully")
             }
-        } else {
-            self.log("❌ Failed to initialize NSAppleScript")
+        }
+    }
+    
+    func simulatePasteCommand() {
+        if !AXIsProcessTrusted() {
+            self.promptForAccessibility()
+            return
+        }
+        
+        let vKeyCode = CGKeyCode(kVK_ANSI_V)
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+        
+        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
+        let vDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true)
+        vDown?.flags = .maskCommand
+        let vUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false)
+        vUp?.flags = .maskCommand
+        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
+        
+        cmdDown?.post(tap: .cghidEventTap)
+        vDown?.post(tap: .cghidEventTap)
+        vUp?.post(tap: .cghidEventTap)
+        cmdUp?.post(tap: .cghidEventTap)
+        
+        self.log("✅ Simulated Cmd+V")
+    }
+    
+    func promptForAccessibility() {
+        self.log("❌ Permission Missing: Prompting user")
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "Accessibility Permission Needed"
+            alert.informativeText = "NicVox needs Accessibility permission to type/paste text.\n\nPlease enable it in System Settings."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Open Settings")
+            alert.addButton(withTitle: "Cancel")
+            
+            if alert.runModal() == .alertFirstButtonReturn {
+                let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+                NSWorkspace.shared.open(url)
+            }
         }
     }
     
@@ -121,24 +154,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
                 try? data.write(to: logFile)
             }
         }
-    }    
-    func simulatePasteCommand() {
-        // Use AppleScript which is safer and handles modifier isolation better
-        let source = """
-        tell application "System Events"
-            keystroke "v" using {command down}
-        end tell
-        """
-        
-        if let script = NSAppleScript(source: source) {
-            var error: NSDictionary?
-            script.executeAndReturnError(&error)
-            if let error = error {
-                print("Paste Error: \(error)")
-            }
-        }
     }
-    
+
+    // --- Standard Delegate Methods ---
+
     func menuWillOpen(_ menu: NSMenu) {
         menu.removeAllItems()
         
@@ -237,7 +256,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
         DispatchQueue.main.async {
             guard let button = self.statusBarItem.button else { return }
             
-            // Create the NVX icon
             let nvxIcon = self.createNVXIcon()
             button.image = nvxIcon
             button.contentTintColor = nil 
