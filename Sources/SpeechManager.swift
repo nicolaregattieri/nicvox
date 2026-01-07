@@ -17,9 +17,10 @@ class SpeechManager: NSObject, SFSpeechRecognizerDelegate, ObservableObject {
     
     override init() {
         super.init()
-        SFSpeechRecognizer.requestAuthorization { _ in }
+        SFSpeechRecognizer.requestAuthorization { status in
+            Logger.shared.log("Auth status: \(status.rawValue)")
+        }
         
-        // Ensure defaults exist
         let defaults = UserDefaults.standard
         if defaults.object(forKey: "playSounds") == nil { defaults.set(true, forKey: "playSounds") }
         if defaults.object(forKey: "startSound") == nil { defaults.set("Tink", forKey: "startSound") }
@@ -32,28 +33,34 @@ class SpeechManager: NSObject, SFSpeechRecognizerDelegate, ObservableObject {
             return 
         }
         
-        // Setup Recognizer
-        speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: localeId))
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            recognitionRequest?.endAudio()
+        }
+        
+        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: localeId)) else {
+            throw NSError(domain: "NicVox", code: 1, userInfo: [NSLocalizedDescriptionKey: "Locale not supported"])
+        }
+        speechRecognizer = recognizer
         speechRecognizer?.delegate = self
         currentLocaleId = localeId
         
-        if recognitionTask != nil {
-            recognitionTask?.cancel()
-            recognitionTask = nil
-        }
+        recognitionTask?.cancel()
+        recognitionTask = nil
         
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        guard let recognitionRequest = recognitionRequest else { fatalError("Unable to create request") }
+        guard let req = recognitionRequest else { return }
         
         if #available(macOS 10.15, *) {
-            recognitionRequest.requiresOnDeviceRecognition = false
+            req.requiresOnDeviceRecognition = false
         }
-        recognitionRequest.shouldReportPartialResults = true
+        req.shouldReportPartialResults = true
         
         let inputNode = audioEngine.inputNode
         inputNode.removeTap(onBus: 0)
         
-        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { result, error in
+        recognitionTask = speechRecognizer?.recognitionTask(with: req) { [weak self] result, error in
+            guard let self = self else { return }
             var isFinal = false
             
             if let result = result {
@@ -65,10 +72,7 @@ class SpeechManager: NSObject, SFSpeechRecognizerDelegate, ObservableObject {
             }
             
             if error != nil || isFinal {
-                self.audioEngine.stop()
-                inputNode.removeTap(onBus: 0)
-                self.recognitionRequest = nil
-                self.recognitionTask = nil
+                self.stopAudioEngineSafe()
                 self.isRecording = false
             }
         }
@@ -82,24 +86,25 @@ class SpeechManager: NSObject, SFSpeechRecognizerDelegate, ObservableObject {
         try audioEngine.start()
         
         isRecording = true
-        print("Recording started in \(localeId)...")
+        Logger.shared.log("Recording started in \(localeId)")
         
-        // Play Start Sound
         let soundName = UserDefaults.standard.string(forKey: "startSound") ?? "Tink"
         playSound(name: soundName)
     }
     
     func stopRecording() {
         if isRecording {
-            audioEngine.stop()
-            recognitionRequest?.endAudio()
+            stopAudioEngineSafe()
             isRecording = false
-            print("Recording stopped.")
             
-            // Play Stop Sound
             let soundName = UserDefaults.standard.string(forKey: "stopSound") ?? "Pop"
             playSound(name: soundName)
         }
+    }
+    
+    private func stopAudioEngineSafe() {
+        audioEngine.stop()
+        recognitionRequest?.endAudio()
     }
     
     private func playSound(name: String) {

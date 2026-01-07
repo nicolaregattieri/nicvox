@@ -70,15 +70,16 @@ class HotKeyManager {
                 var hotKeyID = EventHotKeyID()
                 GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
                 
-                switch hotKeyID.id {
-                case manager.idPortuguese:
-                    manager.delegate?.hotKeyPressed(language: .portuguese)
-                case manager.idEnglish:
-                    manager.delegate?.hotKeyPressed(language: .english)
-                default:
-                    break
-                }
-                
+                            switch hotKeyID.id {
+                            case manager.idPortuguese:
+                                Logger.shared.log("🎹 Hotkey Pressed: Portuguese")
+                                manager.delegate?.hotKeyPressed(language: .portuguese)
+                            case manager.idEnglish:
+                                Logger.shared.log("🎹 Hotkey Pressed: English")
+                                manager.delegate?.hotKeyPressed(language: .english)
+                            default:
+                                break
+                            }                
                 return noErr
             }, 1, eventSpec, selfPointer, &eventHandler)
         }

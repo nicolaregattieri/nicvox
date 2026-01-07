@@ -11,6 +11,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
     var lastLanguage: LanguageHotkey = .portuguese
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        Logger.shared.log("🚀 NicVox Started")
+        
         // Ensure defaults
         if UserDefaults.standard.string(forKey: "insertionMethod") == nil {
             UserDefaults.standard.set("clipboard", forKey: "insertionMethod")
@@ -31,7 +33,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
         }
         
         speechManager.onError = { [weak self] error in
-            print("Speech Error: \(error)")
+            Logger.shared.log("❌ Speech Manager reported error: \(error)")
             self?.updateIcon()
         }
     }
@@ -42,25 +44,42 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
         // Log info
         let frontApp = NSWorkspace.shared.frontmostApplication
         let appName = frontApp?.localizedName ?? "Unknown"
-        self.log("🗣️ Recognized: '\(text)' in App: \(appName)")
+        let bundleId = frontApp?.bundleIdentifier ?? "Unknown"
+        Logger.shared.log("🗣️ Recognized: '\(text)'")
+        Logger.shared.log("🎯 Target App: \(appName) (\(bundleId))")
         
-        if method == "typing" {
-            // Typing Mode (AppleScript)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self.simulateTyping(text)
-            }
-        } else {
-            // Clipboard + AutoPaste Mode
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(text, forType: .string)
-            self.log("📋 Copied to Clipboard")
+        // START SAFETY CHECK: Wait for keys to be released
+        waitForModifiersRelease { [weak self] in
+            guard let self = self else { return }
             
-            if UserDefaults.standard.bool(forKey: "autoPaste") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if method == "typing" {
+                self.simulateTyping(text)
+            } else {
+                // Clipboard + AutoPaste Mode
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(text, forType: .string)
+                Logger.shared.log("📋 Copied to Clipboard")
+                
+                if UserDefaults.standard.bool(forKey: "autoPaste") {
+                    Logger.shared.log("⌨️ Attempting Auto-Paste...")
                     self.simulatePasteCommand()
                 }
             }
+        }
+    }
+    
+    func waitForModifiersRelease(completion: @escaping () -> Void) {
+        let flags = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // Check specifically for Cmd, Opt, Ctrl, Shift
+        if flags.contains(.command) || flags.contains(.option) || flags.contains(.control) || flags.contains(.shift) {
+            Logger.shared.log("⚠️ Modifiers held down. Waiting...")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.waitForModifiersRelease(completion: completion)
+            }
+        } else {
+            // All clear!
+            completion()
         }
     }
     
@@ -87,9 +106,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
         if let appleScript = NSAppleScript(source: scriptSource) {
             appleScript.executeAndReturnError(&error)
             if let error = error {
-                self.log("❌ AppleScript Error: \(error)")
+                Logger.shared.log("❌ AppleScript Error: \(error)")
             } else {
-                self.log("✅ Typing executed successfully")
+                Logger.shared.log("✅ Typing executed successfully")
             }
         }
     }
@@ -100,9 +119,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
             return
         }
         
+        // Debug: Log modifier state
+        // If user is still holding Cmd+Option, this might interfere.
+        // We can't easily clear hardware state, but we can log it.
+        
         let vKeyCode = CGKeyCode(kVK_ANSI_V)
         guard let source = CGEventSource(stateID: .hidSystemState) else { return }
         
+        // Simulate clean Cmd+V
         let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
         let vDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true)
         vDown?.flags = .maskCommand
@@ -115,11 +139,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
         vUp?.post(tap: .cghidEventTap)
         cmdUp?.post(tap: .cghidEventTap)
         
-        self.log("✅ Simulated Cmd+V")
+        Logger.shared.log("✅ Simulated Cmd+V")
     }
     
     func promptForAccessibility() {
-        self.log("❌ Permission Missing: Prompting user")
+        Logger.shared.log("❌ Permission Missing: Prompting user")
         DispatchQueue.main.async {
             let alert = NSAlert()
             alert.messageText = "Accessibility Permission Needed"
@@ -131,27 +155,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
             if alert.runModal() == .alertFirstButtonReturn {
                 let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
                 NSWorkspace.shared.open(url)
-            }
-        }
-    }
-    
-    func log(_ message: String) {
-        let logFile = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Documents")
-            .appendingPathComponent("NicVox_Log.txt")
-        
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-        let text = "\(timestamp): \(message)\n"
-        
-        if let data = text.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: logFile.path) {
-                if let fileHandle = try? FileHandle(forWritingTo: logFile) {
-                    fileHandle.seekToEndOfFile()
-                    fileHandle.write(data)
-                    fileHandle.closeFile()
-                }
-            } else {
-                try? data.write(to: logFile)
             }
         }
     }
@@ -187,6 +190,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
                 self?.hotKeyManager.registerHotKeys()
                 self?.settingsWindow?.close()
                 self?.settingsWindow = nil
+                Logger.shared.log("⚙️ Preferences Saved")
             })
             
             settingsWindow = NSWindow(
@@ -248,7 +252,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotKeyDelegate, NSMenuDelega
             try speechManager.startRecording(localeId: localeId)
             updateIcon(activeLanguage: language)
         } catch {
-            print("Failed to start: \(error)")
+            Logger.shared.log("❌ Error starting recording: \(error)")
         }
     }
     
