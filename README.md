@@ -1,51 +1,58 @@
 # NicVox 🎙️
 
-**Native macOS Voice-to-Text for the Terminal Age.**
-
-NicVox is a lightweight, menu-bar application that transcribes your speech directly to your clipboard (or types it directly). Designed for developers, writers, and power users who want privacy-first, on-device dictation with global hotkeys.
+A native macOS Menu Bar application that converts speech to text and automatically pastes it into your active window (Terminal, Editor, Browser, etc.). Designed for speed and developer productivity.
 
 <p align="center">
-  <img src="nvx.png" width="128" alt="NicVox Icon">
+  <img src="nvx.png" width="128" height="128" alt="NicVox Icon">
 </p>
+
+## 🚀 Quick Install
+
+Open your Terminal and run this command:
+
+```bash
+curl -sL https://raw.githubusercontent.com/nicolaregattieri/nicvox/main/setup.sh | bash
+```
+
+That's it! The app will be installed to your `/Applications` folder and opened automatically.
 
 ## ✨ Features
 
-*   **Global Hotkeys:**
-    *   `Cmd + Opt + P`: Record in **Portuguese**.
-    *   `Cmd + Opt + E`: Record in **English**.
-*   **Privacy First:** Uses Apple's native on-device Speech framework. No audio is sent to the cloud.
-*   **Auto-Paste:** Automatically pastes the transcribed text into your active application (VS Code, Terminal, Slack, etc.).
-*   **Menu Bar App:** Lives quietly in your menu bar.
-*   **Zero Dependencies:** Written in pure Swift. No Electron, no Python, just performance.
+*   **Global Shortcuts:** Trigger recording from anywhere.
+*   **Dual Language:** Instantly switch between Portuguese (🇧🇷) and English (🇺🇸).
+*   **Auto-Paste:** Automatically simulates `Cmd+V` to paste the transcribed text into your active app (requires Accessibility permission).
+*   **Audio Feedback:** Customizable sounds for Start/Stop recording.
+*   **Native & Fast:** Uses Apple's on-device `SFSpeechRecognizer` (no API keys required).
+*   **Privacy First:** No audio is sent to third-party servers (besides Apple's processing).
 
-## 🚀 Installation
+## 🎮 Usage
 
-### The Magic Command (One-line)
-Run this in your terminal to install NicVox:
+| Shortcut | Action |
+| :--- | :--- |
+| **Cmd + Option + P** | Start recording in **Portuguese** 🇧🇷 |
+| **Cmd + Option + E** | Start recording in **English** 🇺🇸 |
+| **(Press Again)** | Stop recording & Paste |
 
-```bash
-curl -sL https://raw.githubusercontent.com/nicolaregattieri/NicVox/main/setup.sh | bash
-```
-
-### Manual Install
-1.  Download the latest `.dmg` from the [Releases](https://github.com/nicolaregattieri/NicVox/releases) page.
-2.  Drag `NicVox.app` to your Applications folder.
+*Shortcuts and sounds can be customized in the **Preferences** menu.*
 
 ## 🛠️ Build from Source
 
-Requirements: macOS 12.0+ and Xcode Command Line Tools.
+If you prefer to build it yourself:
 
-```bash
-git clone https://github.com/nicolaregattieri/NicVox.git
-cd NicVox
-./install.sh
-```
+1.  Clone the repo:
+    ```bash
+    git clone https://github.com/nicolaregattieri/nicvox.git
+    cd nicvox
+    ```
+2.  Run the installer:
+    ```bash
+    ./install.sh
+    ```
+3.  Generate DMG (Optional):
+    ```bash
+    ./create_dmg.sh
+    ```
 
-## ⚙️ Configuration
-Click the **NVX** icon in the menu bar and select **Preferences** to:
-*   Change Hotkeys.
-*   Enable/Disable Auto-Paste.
-*   Customize Start/Stop sounds.
+## 📄 License
 
-## 📝 License
-MIT License. Feel free to fork and modify!
+MIT License. Built with Swift and SwiftUI.
