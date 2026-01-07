@@ -1,48 +1,41 @@
 #!/bin/bash
 
+# Configurações
+GITHUB_USER="nicolaregattieri"
+REPO_NAME="nicvox"
 APP_NAME="NicVox"
-INSTALL_DIR="/Applications"
-TEMP_DIR=$(mktemp -d)
-REPO_URL="https://github.com/nicolaregattieri/NicVox"
+DMG_NAME="NicVox_Installer.dmg"
 
-echo "🟣 Installing $APP_NAME..."
+echo "🚀 Iniciando instalação do $APP_NAME..."
 
-# 1. Try to download pre-built binary (Best experience)
-# Note: You need to create a Release on GitHub and attach NicVox.zip for this to work perfectly.
-echo "⬇️  Attempting to download latest release..."
-LATEST_URL="$REPO_URL/releases/latest/download/$APP_NAME.zip"
+# 1. Obter a URL da última versão (Release) ou do arquivo no repo
+# Se você usar Releases do GitHub (recomendado), esta linha pega o arquivo do release mais recente:
+URL="https://github.com/$GITHUB_USER/$REPO_NAME/releases/latest/download/$DMG_NAME"
 
-if curl --output /dev/null --silent --head --fail "$LATEST_URL"; then
-    curl -L -o "$TEMP_DIR/$APP_NAME.zip" "$LATEST_URL"
-    unzip -q "$TEMP_DIR/$APP_NAME.zip" -d "$TEMP_DIR"
-    
-    echo "📦 Moving to Applications..."
-    rm -rf "$INSTALL_DIR/$APP_NAME.app"
-    mv "$TEMP_DIR/$APP_NAME.app" "$INSTALL_DIR/"
-    
-    echo "✅ Installed successfully from Release!"
-else
-    echo "⚠️  Release not found. Building from source... (Requires Swift)"
-    
-    # 2. Fallback: Build from source
-    if ! command -v swiftc &> /dev/null; then
-        echo "❌ Error: Swift compiler not found. Please install Xcode Command Line Tools or download the App manually."
-        exit 1
-    fi
-    
-    git clone --depth 1 $REPO_URL "$TEMP_DIR/source"
-    cd "$TEMP_DIR/source"
-    ./install.sh
-    
-    # install.sh already moves to build/, let's move to Applications
-    rm -rf "$INSTALL_DIR/$APP_NAME.app"
-    mv "build/$APP_NAME.app" "$INSTALL_DIR/"
-    
-    echo "✅ Built and Installed successfully!"
+# Se você apenas subir o DMG na raiz do repo, use esta (não recomendado para arquivos grandes):
+# URL="https://github.com/$GITHUB_USER/$REPO_NAME/raw/main/$DMG_NAME"
+
+echo "📥 Baixando instalador..."
+curl -L "$URL" -o "/tmp/$DMG_NAME"
+
+if [ $? -ne 0 ]; then
+    echo "❌ Erro ao baixar o arquivo. Verifique se a URL está correta e o repo é público."
+    exit 1
 fi
 
-# Cleanup
-rm -rf "$TEMP_DIR"
+echo "💿 Montando imagem de disco..."
+hdiutil attach "/tmp/$DMG_NAME" -mountpoint "/tmp/nicvox_mount" -quiet
 
-echo "🎉 NicVox is ready! You can open it from your Applications folder."
-open "$INSTALL_DIR/$APP_NAME.app"
+echo "🚚 Instalando em /Applications..."
+cp -R "/tmp/nicvox_mount/$APP_NAME.app" "/Applications/"
+
+echo "🛡️  Removendo travas de segurança (Quarentena)..."
+xattr -cr "/Applications/$APP_NAME.app"
+
+echo "⏏️  Desmontando..."
+hdiutil detach "/tmp/nicvox_mount" -quiet
+rm "/tmp/$DMG_NAME"
+
+echo "✅ $APP_NAME instalado com sucesso!"
+echo "👉 Abra-o via Spotlight ou na pasta Aplicativos."
+open "/Applications/$APP_NAME.app"

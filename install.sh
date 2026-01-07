@@ -52,6 +52,9 @@ fi
 echo "📄 Copying Info.plist..."
 cp Info.plist "$BUILD_DIR/$APP_NAME.app/Contents/Info.plist"
 
+echo "🔏 Signing App (Ad-Hoc)..."
+codesign --force --deep --sign - "$BUILD_DIR/$APP_NAME.app"
+
 echo "✅ Build complete!"
 echo "👉 You can run the app from: $BUILD_DIR/$APP_NAME.app"
 echo "   Or move it to Applications: mv $BUILD_DIR/$APP_NAME.app /Applications/"
